@@ -6,114 +6,159 @@ from requests_toolbelt import MultipartEncoder
 from .errors import *
 from .converter import convert_html_to_telegraph_format, convert_json_to_html
 
-base_url = 'http://telegra.ph'
-save_url = 'https://edit.telegra.ph/save'
-api_url = 'https://api.telegra.ph'
-default_user_agent = 'Python_telegraph_poster/0.1'
+base_url = "http://graph.org"
+save_url = "https://edit.graph.org/save"
+api_url = "https://api.graph.org"
+default_user_agent = "Python_telegraph_poster/0.1"
 
 
-def _upload(title, author, text,
-            author_url='', tph_uuid=None, page_id=None, user_agent=default_user_agent, convert_html=True,
-            clean_html=True):
+def _upload(
+    title,
+    author,
+    text,
+    author_url="",
+    tph_uuid=None,
+    page_id=None,
+    user_agent=default_user_agent,
+    convert_html=True,
+    clean_html=True,
+):
 
     if not title:
-        raise TitleRequiredError('Title is required')
+        raise TitleRequiredError("Title is required")
     if not text:
-        raise TextRequiredError('Text is required')
+        raise TextRequiredError("Text is required")
 
-    content = convert_html_to_telegraph_format(text, clean_html) if convert_html else text
+    content = (
+        convert_html_to_telegraph_format(text, clean_html) if convert_html else text
+    )
     cookies = dict(tph_uuid=tph_uuid) if tph_uuid and page_id else None
 
     fields = {
-        'Data': ('content.html', content, 'plain/text'),
-        'title': title,
-        'author': author,
-        'author_url': author_url,
-        'page_id': page_id or '0',
-        'save_hash': ''
+        "Data": ("content.html", content, "plain/text"),
+        "title": title,
+        "author": author,
+        "author_url": author_url,
+        "page_id": page_id or "0",
+        "save_hash": "",
     }
 
-    m = MultipartEncoder(fields, boundary='TelegraPhBoundary21')
+    m = MultipartEncoder(fields, boundary="TelegraPhBoundary21")
 
     headers = {
-        'Content-Type': m.content_type,
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'User-Agent': user_agent,
-        'Origin': 'http://telegra.ph'
+        "Content-Type": m.content_type,
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "User-Agent": user_agent,
+        "Origin": "http://graph.org",
     }
     with requests.Session() as r:
-        r.mount('https://', requests.adapters.HTTPAdapter(max_retries=3))
+        r.mount("https://", requests.adapters.HTTPAdapter(max_retries=3))
 
-        response = r.post(save_url, timeout=4, headers=headers, cookies=cookies, data=m.to_string())
+        response = r.post(
+            save_url, timeout=4, headers=headers, cookies=cookies, data=m.to_string()
+        )
         result = json.loads(response.text)
-        if 'path' in result:
-            result['tph_uuid'] = response.cookies.get('tph_uuid') or tph_uuid
-            result['url'] = base_url + '/' + result['path']
+        if "path" in result:
+            result["tph_uuid"] = response.cookies.get("tph_uuid") or tph_uuid
+            result["url"] = base_url + "/" + result["path"]
             return result
         else:
-            error_msg = result['error'] if 'error' in result else ''
+            error_msg = result["error"] if "error" in result else ""
             raise TelegraphError(error_msg)
 
 
-def _upload_via_api(title, author, text, author_url='', access_token=None, user_agent=default_user_agent,
-                    convert_html=True,  clean_html=True, path=None):
+def _upload_via_api(
+    title,
+    author,
+    text,
+    author_url="",
+    access_token=None,
+    user_agent=default_user_agent,
+    convert_html=True,
+    clean_html=True,
+    path=None,
+):
 
     if not title:
-        raise TitleRequiredError('Title is required')
+        raise TitleRequiredError("Title is required")
     if not text:
-        raise TextRequiredError('Text is required')
+        raise TextRequiredError("Text is required")
     if not access_token:
-        raise APITokenRequiredError('API token is required')
+        raise APITokenRequiredError("API token is required")
     if not author:
-        author = ''  # author is optional
+        author = ""  # author is optional
     if not author_url:
-        author_url = ''  # author_url is optional
+        author_url = ""  # author_url is optional
 
-    content = convert_html_to_telegraph_format(text, clean_html) if convert_html else text
-    method = '/createPage' if not path else '/editPage'
+    content = (
+        convert_html_to_telegraph_format(text, clean_html) if convert_html else text
+    )
+    method = "/createPage" if not path else "/editPage"
 
     params = {
-        'access_token': access_token,
-        'title': title[:256],
-        'author_name': author[:128],
-        'author_url': author_url[:512],
-        'content': content,
+        "access_token": access_token,
+        "title": title[:256],
+        "author_name": author[:128],
+        "author_url": author_url[:512],
+        "content": content,
     }
     if path:
-        params.update({'path': path})
+        params.update({"path": path})
 
-    resp = requests.post(api_url + method, params, headers={'User-Agent': user_agent}).json()
-    if resp['ok'] is True:
+    resp = requests.post(
+        api_url + method, params, headers={"User-Agent": user_agent}
+    ).json()
+    if resp["ok"] is True:
         return {
-            'path': resp['result']['path'],
-            'url': base_url + '/' + resp['result']['path']
+            "path": resp["result"]["path"],
+            "url": base_url + "/" + resp["result"]["path"],
         }
     else:
-        error_msg = resp['error'] if 'error' in resp else ''
+        error_msg = resp["error"] if "error" in resp else ""
         raise TelegraphError(error_msg)
 
 
-def create_api_token(short_name, author_name=None, author_url=None, user_agent=default_user_agent):
+def create_api_token(
+    short_name, author_name=None, author_url=None, user_agent=default_user_agent
+):
     params = {
-        'short_name': short_name,
+        "short_name": short_name,
     }
     if author_name:
-        params.update({'author_name': author_name})
+        params.update({"author_name": author_name})
     if author_url:
-        params.update({'author_url': author_url})
+        params.update({"author_url": author_url})
 
-    resp = requests.get(api_url+'/createAccount', params, headers={'User-Agent': user_agent})
+    resp = requests.get(
+        api_url + "/createAccount", params, headers={"User-Agent": user_agent}
+    )
     json_data = resp.json()
-    return json_data['result']
+    return json_data["result"]
 
 
-def upload_to_telegraph(title, author, text, author_url='', tph_uuid=None, page_id=None, user_agent=default_user_agent):
+def upload_to_telegraph(
+    title,
+    author,
+    text,
+    author_url="",
+    tph_uuid=None,
+    page_id=None,
+    user_agent=default_user_agent,
+):
     return _upload(title, author, text, author_url, tph_uuid, page_id, user_agent)
 
 
 class TelegraphPoster(object):
-    def __init__(self, tph_uuid=None, page_id=None, user_agent=default_user_agent, clean_html=True, convert_html=True,
-                 use_api=False, access_token=None):
+    def __init__(
+        self,
+        tph_uuid=None,
+        page_id=None,
+        user_agent=default_user_agent,
+        clean_html=True,
+        convert_html=True,
+        use_api=False,
+        access_token=None,
+    ):
         self.title = None
         self.author = None
         self.author_url = None
@@ -124,7 +169,7 @@ class TelegraphPoster(object):
         self.user_agent = user_agent
         self.clean_html = clean_html
         self.convert_html = convert_html
-        self.access_token = access_token or os.getenv('TELEGRAPH_ACCESS_TOKEN', None)
+        self.access_token = access_token or os.getenv("TELEGRAPH_ACCESS_TOKEN", None)
         self.account = None
         self.use_api = use_api
         if self.access_token:
@@ -134,11 +179,13 @@ class TelegraphPoster(object):
     def _api_request(self, method, params=None):
         params = params or {}
         if self.access_token:
-            params['access_token'] = self.access_token
-        resp = requests.get(api_url + '/' + method, params, headers={'User-Agent': self.user_agent})
+            params["access_token"] = self.access_token
+        resp = requests.get(
+            api_url + "/" + method, params, headers={"User-Agent": self.user_agent}
+        )
         return resp.json()
 
-    def post(self, title, author, text, author_url=''):
+    def post(self, title, author, text, author_url=""):
         self.path = None
         self.title = title
         self.author = author
@@ -146,30 +193,28 @@ class TelegraphPoster(object):
         self.text = text
         result = self.edit()
         if not self.use_api:
-            self.tph_uuid = result['tph_uuid']
-            self.page_id = result['page_id']
+            self.tph_uuid = result["tph_uuid"]
+            self.page_id = result["page_id"]
         return result
 
-    def edit(self, title=None, author=None, text=None, author_url='', path=None):
+    def edit(self, title=None, author=None, text=None, author_url="", path=None):
         params = {
-            'title': title or self.title,
-            'author': author or self.author,
-            'text': text or self.text,
-            'author_url': author_url or self.author_url,
-            'user_agent': self.user_agent,
-            'clean_html': self.clean_html,
-            'convert_html': self.convert_html
+            "title": title or self.title,
+            "author": author or self.author,
+            "text": text or self.text,
+            "author_url": author_url or self.author_url,
+            "user_agent": self.user_agent,
+            "clean_html": self.clean_html,
+            "convert_html": self.convert_html,
         }
         if self.use_api:
-            result = _upload_via_api(access_token=self.access_token, path=path or self.path, **params)
-            self.path = result['path']
+            result = _upload_via_api(
+                access_token=self.access_token, path=path or self.path, **params
+            )
+            self.path = result["path"]
             return result
         else:
-            return _upload(
-                tph_uuid=self.tph_uuid,
-                page_id=self.page_id,
-                **params
-            )
+            return _upload(tph_uuid=self.tph_uuid, page_id=self.page_id, **params)
 
     def get_account_info(self, fields=None):
         """
@@ -179,13 +224,13 @@ class TelegraphPoster(object):
         :return: Returns an Account object on success.
         """
         if not self.access_token:
-            raise Exception('Access token is required')
+            raise Exception("Access token is required")
 
-        return self._api_request('getAccountInfo', {
-            'fields': json.dumps(fields) if fields else ''
-        }).get('result')
+        return self._api_request(
+            "getAccountInfo", {"fields": json.dumps(fields) if fields else ""}
+        ).get("result")
 
-    def edit_account_info(self, short_name, author_name='', author_url=''):
+    def edit_account_info(self, short_name, author_name="", author_url=""):
         """
             Use this method to update information about a Telegraph account.
             Pass only the parameters that you want to edit
@@ -197,31 +242,30 @@ class TelegraphPoster(object):
         :return:  Account object with the default fields.
         """
         if not self.access_token:
-            raise Exception('Access token is required')
-        params = {
-            'short_name': short_name
-        }
+            raise Exception("Access token is required")
+        params = {"short_name": short_name}
         if author_name:
-            params['author_name'] = author_name
+            params["author_name"] = author_name
         if author_url:
-            params['author_url'] = author_url
-        return self._api_request('editAccountInfo', params).get('result')
+            params["author_url"] = author_url
+        return self._api_request("editAccountInfo", params).get("result")
 
     def get_page(self, path, return_content=False):
         """
         Use this method to get a Telegraph page. Returns a Page object on success.
         :param path:  (String) Required. Path to the Telegraph page (in the format Title-12-31, i.e.
-            everything that comes after http://telegra.ph/).
+            everything that comes after http://graph.org/).
         :param return_content: (Boolean, default = false) If true, content field will be returned in Page object.
         :return: Returns a Page object on success
         """
-        json_response = self._api_request('getPage', {
-            'path': path,
-            'return_content': return_content
-        })
+        json_response = self._api_request(
+            "getPage", {"path": path, "return_content": return_content}
+        )
         if return_content:
-            json_response['result']['html'] = convert_json_to_html(json_response['result']['content'], base_url)
-        return json_response.get('result')
+            json_response["result"]["html"] = convert_json_to_html(
+                json_response["result"]["content"], base_url
+            )
+        return json_response.get("result")
 
     def get_page_list(self, offset=0, limit=50):
         """
@@ -230,11 +274,10 @@ class TelegraphPoster(object):
         :param limit: Limits the number of pages to be retrieved.
         :return: PageList object, sorted by most recently created pages first.
         """
-        json_response = self._api_request('getPageList', {
-            'offset': offset,
-            'limit': limit
-        })
-        return json_response.get('result')
+        json_response = self._api_request(
+            "getPageList", {"offset": offset, "limit": limit}
+        )
+        return json_response.get("result")
 
     def get_views(self, path, year=None, month=None, day=None, hour=None):
         """
@@ -250,13 +293,10 @@ class TelegraphPoster(object):
         :param hour: If passed, the number of page views for the requested hour will be returned.
         :return: Returns a PageViews object on success. By default, the total number of page views will be returned.
         """
-        return self._api_request('getViews', {
-            'path': path,
-            'year': year,
-            'month': month,
-            'day': day,
-            'hour': hour
-        }).get('result')
+        return self._api_request(
+            "getViews",
+            {"path": path, "year": year, "month": month, "day": day, "hour": hour},
+        ).get("result")
 
     def create_api_token(self, short_name, author_name=None, author_url=None):
         """
@@ -264,16 +304,18 @@ class TelegraphPoster(object):
             Most users only need one account, but this can be useful for channel administrators who would like to keep
             individual author names and profile links for each of their channels.
         :param short_name: Account name, helps users with several accounts remember which they are currently using.
-            Displayed to the user above the "Edit/Publish" button on Telegra.ph, other users don't see this name.
+            Displayed to the user above the "Edit/Publish" button on graph.org, other users don't see this name.
         :param author_name: Default author name used when creating new articles.
         :param author_url: Default profile link, opened when users click on the author's name below the title.
             Can be any link, not necessarily to a Telegram profile or channel.
         :return: Account object with the regular fields and an additional access_token field.
         """
-        token_data = create_api_token(short_name, author_name, author_url, self.user_agent)
+        token_data = create_api_token(
+            short_name, author_name, author_url, self.user_agent
+        )
         self.use_api = True
         self.account = token_data
-        self.access_token = token_data['access_token']
+        self.access_token = token_data["access_token"]
         return token_data
 
     def revoke_access_token(self):
@@ -283,28 +325,28 @@ class TelegraphPoster(object):
         :return: Account object with new access_token and auth_url fields.
         """
         if not self.access_token:
-            raise Exception('Access token is required')
+            raise Exception("Access token is required")
 
-        json_response = self._api_request('revokeAccessToken')
-        if json_response['ok'] is True:
-            self.access_token = json_response['result']['access_token']
+        json_response = self._api_request("revokeAccessToken")
+        if json_response["ok"] is True:
+            self.access_token = json_response["result"]["access_token"]
 
-        return json_response['result']
+        return json_response["result"]
 
     def create_page(self, *args, **kwargs):
         """
-            Shortcut method for post()
+        Shortcut method for post()
         """
         return self.post(*args, **kwargs)
 
     def edit_page(self, *args, **kwargs):
         """
-            Shortcut method for edit()
+        Shortcut method for edit()
         """
         return self.edit(*args, **kwargs)
 
     def create_account(self, *args, **kwargs):
         """
-            Shortcut method for create_api_token()
+        Shortcut method for create_api_token()
         """
         return self.create_api_token(*args, **kwargs)
