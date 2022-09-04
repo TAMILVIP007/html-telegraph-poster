@@ -32,8 +32,7 @@ def _check_mimetypes(type):
 def _get_mimetype_from_response_headers(headers):
     types = re.split(r"[;,]", headers["Content-Type"])
     if len(types):
-        ext = mimetypes.guess_extension(types[0], strict=False)
-        if ext:
+        if ext := mimetypes.guess_extension(types[0], strict=False):
             return mimetypes.types_map.get(ext, mimetypes.common_types.get(ext, ""))
     return ""
 
@@ -78,9 +77,10 @@ def upload_image(
     headers = {
         "X-Requested-With": "XMLHttpRequest",
         "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Referer": base_url + "/",
+        "Referer": f"{base_url}/",
         "User-Agent": user_agent,
     }
+
 
     files = {"file": ("blob", img, img_content_type)}
     try:
@@ -90,18 +90,20 @@ def upload_image(
     except requests.exceptions.ReadTimeout:
         raise ImageUploadHTTPError("Request timeout")
 
-    if json_response.status_code == requests.codes.ok and json_response.content:
-        json_response = json_response.json()
-        if return_json:
-            return json_response
-        elif type(json_response) is list and len(json_response):
-            return (
-                "src" in json_response[0] and base_url + json_response[0]["src"] or ""
-            )
-        elif type(json_response) is dict:
-            if json_response.get("error") == "File type invalid":
-                raise FileTypeNotSupported("This file is unsupported")
-            else:
-                return str(json_response)
-    else:
+    if (
+        json_response.status_code != requests.codes.ok
+        or not json_response.content
+    ):
         raise Exception("Error while uploading the image")
+    json_response = json_response.json()
+    if return_json:
+        return json_response
+    elif type(json_response) is list and len(json_response):
+        return (
+            "src" in json_response[0] and base_url + json_response[0]["src"] or ""
+        )
+    elif type(json_response) is dict:
+        if json_response.get("error") == "File type invalid":
+            raise FileTypeNotSupported("This file is unsupported")
+        else:
+            return str(json_response)
