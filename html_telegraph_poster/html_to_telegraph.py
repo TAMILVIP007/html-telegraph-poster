@@ -107,7 +107,10 @@ def _upload_via_api(
 
     resp = requests.post(
         api_url + method, params, headers={"User-Agent": user_agent}
-    ).json()
+    )
+    if resp.status_code != 200:
+        raise TelegraphError("Error while uploading to Telegraph")
+    resp = resp.json()
     if resp["ok"] is True:
         return {
             "path": resp["result"]["path"],
